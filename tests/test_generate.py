@@ -24,13 +24,15 @@ def test_exact_contract_unicode_and_deterministic_bytes(tmp_path, monkeypatch):
     for rel in files:
         assert (tmp_path / "a" / rel).read_bytes() == (tmp_path / "b" / rel).read_bytes()
     index = json.loads((tmp_path / "a/2026/index.json").read_bytes())
-    assert index["schemaVersion"] == 1
+    assert index["schemaVersion"] == 2
+    assert index["dataset"]["bboxPrecisionDecimals"] == 6
+    assert index["dataset"]["bboxOrder"] == ["minLon", "minLat", "maxLon", "maxLat"]
     assert index["dataset"]["generatedAt"] == "2026-09-25T12:00:00Z"
     assert index["dataset"]["sourceDbfExportDate"] == "2026-02-18"
     assert index["municipalities"][0] == {
         "name": "Samone", "code": "001235", "region": {"code": "01", "name": "Piemonte"},
         "territorialUnit": {"code": "201", "name": "Torino"},
-        "bbox": [9.0, 45.153477176270556, 9.001272210207242, 45.15437735170131],
+        "bbox": [9.0, 45.153477, 9.001273, 45.154378],
     }
     raw = (tmp_path / "a/2026/comuni/040012.geojson").read_bytes()
     assert "Forlì".encode() in raw and not raw.startswith(b"\xef\xbb\xbf")

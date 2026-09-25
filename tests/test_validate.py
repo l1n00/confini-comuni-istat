@@ -39,6 +39,7 @@ def test_national_validation_rejects_fixture(dataset):
     "missing", "extra", "index-missing", "index-duplicate", "index-name", "index-label",
     "digest", "vertex", "remove-position", "reverse", "hole", "type", "utf8", "bom",
     "nan", "json", "path", "feature-id", "metadata-code", "license", "extra-dist", "manifest", "bbox",
+    "schema-version", "bbox-metadata", "bbox-precision",
 ])
 def test_corruption_blocks_validation(dataset, change):
     source, out = dataset
@@ -79,10 +80,14 @@ def test_corruption_blocks_validation(dataset, change):
         if change == "feature-id": feature["id"] = "999999"
         if change == "metadata-code": doc["metadata"]["code"] = "999999"
         if change == "license": doc["metadata"].pop("license")
-        if change == "bbox":
+        if change in ("bbox", "schema-version", "bbox-metadata", "bbox-precision"):
             index_path = out / "2026/index.json"
             index = json.loads(index_path.read_bytes())
-            index["municipalities"][0]["bbox"][0] += .001
+            if change == "bbox":
+                index["municipalities"][0]["bbox"][0] += .001
+            if change == "schema-version": index["schemaVersion"] = 1
+            if change == "bbox-metadata": index["dataset"].pop("bboxPrecisionDecimals")
+            if change == "bbox-precision": index["dataset"]["bboxPrecisionDecimals"] = 15
             index_path.write_text(json.dumps(index), encoding="utf-8")
         p.write_text(json.dumps(doc), encoding="utf-8")
     with pytest.raises(ValueError):

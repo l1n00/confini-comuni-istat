@@ -62,12 +62,16 @@ def verify(base_url, opener=urllib_opener):
         index = json.loads(body.decode("utf-8"))
     except (UnicodeError, json.JSONDecodeError) as exc:
         raise ValueError("index is not strict UTF-8 JSON") from exc
+    require(index["schemaVersion"] == 2, "unsupported index schemaVersion")
+    require(index["dataset"]["bboxPrecisionDecimals"] == 6 and
+            index["dataset"]["bboxOrder"] == ["minLon", "minLat", "maxLon", "maxLat"],
+            "missing or unexpected bbox contract metadata")
     rows = index["municipalities"]
     require(index["dataset"]["recordCount"] == len(rows), "index count mismatch")
     for row in rows:
         bbox = row["bbox"]
         require(isinstance(bbox, list) and len(bbox) == 4 and
-                all(type(value) in (int, float) and re.fullmatch(r"-?\d+(?:\.\d+)?", str(value))
+                all(type(value) in (int, float) and re.fullmatch(r"-?\d+(?:\.\d{1,6})?", str(value))
                     for value in bbox) and
                 -180 <= bbox[0] <= bbox[2] <= 180 and -90 <= bbox[1] <= bbox[3] <= 90,
                 f"invalid index bbox for {row.get('code')}")

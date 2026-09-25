@@ -43,6 +43,9 @@ Ogni voce dell'indice contiene anche:
 "bbox": [minLon, minLat, maxLon, maxLat]
 ```
 
+L'indice usa `schemaVersion: 2`. Ogni bbox è espresso con 6 decimali e
+arrotondato verso l'esterno (ovest/sud per difetto, est/nord per eccesso),
+quindi contiene sempre l'intera geometria con un errore massimo di circa 11 cm.
 Per cercare i comuni che contengono i punti del progetto, usa il bbox come
 filtro rapido, scarica i soli GeoJSON candidati e applica il controllo preciso
 punto-in-poligono. Il bbox da solo può produrre falsi positivi.

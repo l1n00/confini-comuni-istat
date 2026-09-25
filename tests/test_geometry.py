@@ -57,6 +57,24 @@ def test_invalid_geometry_fails_without_repair_and_names_code(rings):
         api().convert_polygon(polygon(rings), IDENTITY, code="001235")
 
 
+def test_outward_bbox_uses_six_decimals_without_losing_vertices():
+    result = api().convert_polygon(polygon([clockwise(0.12345649, 0.12345651, 2)]), IDENTITY, code="001235")
+    exact = api().geometry_bbox(result)
+    outward = api().outward_bbox(result, decimals=6)
+    assert exact == [0.12345649, 0.12345651, 2.12345649, 2.12345651]
+    assert outward == [0.123456, 0.123456, 2.123457, 2.123457]
+    assert all(outward[0] <= value <= outward[2] for ring in result.coordinates for value in [ring[0][0]])
+    assert all(outward[1] <= value <= outward[3] for ring in result.coordinates for value in [ring[0][1]])
+
+
+def test_outward_bbox_never_rounds_inside():
+    result = api().convert_polygon(polygon([clockwise(9.0000001, 45.0000009, .5)]), IDENTITY, code="001235")
+    exact = api().geometry_bbox(result)
+    outward = api().outward_bbox(result, decimals=6)
+    assert outward[0] <= exact[0] and outward[1] <= exact[1]
+    assert outward[2] >= exact[2] and outward[3] >= exact[3]
+
+
 def test_bbox_covers_multipolygon_and_distant_island():
     outer1, outer2 = clockwise(0, 0, 2), clockwise(20, 0, 2)
     result = api().convert_polygon(polygon([outer1, outer2]), IDENTITY, code="113012")

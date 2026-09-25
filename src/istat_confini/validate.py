@@ -17,7 +17,7 @@ from .config import SOURCE_COMPONENTS, PUBLISHED_COUNTS, LICENSE_URL
 from .config import EXCLUDED_MUNICIPALITIES, EXCLUSION_REASON
 from .errors import ArtifactValidationError
 from .generate import feature_document, index_document
-from .geometry import ConvertedGeometry, GeometryAudit, convert_polygon, geometry_bbox, signed_area, validate_bbox
+from .geometry import ConvertedGeometry, GeometryAudit, convert_polygon, geometry_bbox, outward_bbox, signed_area, validate_bbox
 from .manifest import SourceFile, canonical_manifest_bytes, build_source_manifest
 from .source import read_source_catalog, enforce_national_source_counts, iter_source_polygons
 
@@ -104,8 +104,11 @@ def _inspect(root):
     index = strict_json(root / "2026/index.json")
     manifest = strict_json(root / "source-manifest.json")
     _manifest(manifest)
-    require(set(index) == {"schemaVersion", "dataset", "municipalities"} and index["schemaVersion"] == 1, "index schema")
+    require(set(index) == {"schemaVersion", "dataset", "municipalities"} and index["schemaVersion"] == 2, "index schema")
     dataset, rows = index["dataset"], index["municipalities"]
+    require(dataset["bboxPrecisionDecimals"] == 6 and
+            dataset["bboxOrder"] == ["minLon", "minLat", "maxLon", "maxLat"],
+            "bbox contract metadata")
     exclusions = dataset["excludedMunicipalities"]
     require(isinstance(exclusions, list), "exclusion list schema")
     excluded_codes = set()
@@ -174,8 +177,11 @@ def _inspect(root):
         normalized_geometry = ConvertedGeometry(
             feature["geometry"]["type"], normalized_coordinates, audit
         )
-        require(row["bbox"] == geometry_bbox(normalized_geometry),
-                f"{code}: index bbox does not match full geometry")
+        exact_bbox = geometry_bbox(normalized_geometry)
+        require(row["bbox"] == outward_bbox(normalized_geometry) and
+                row["bbox"][0] <= exact_bbox[0] and row["bbox"][1] <= exact_bbox[1] and
+                row["bbox"][2] >= exact_bbox[2] and row["bbox"][3] >= exact_bbox[3],
+                f"{code}: index bbox is not the conservative 6-decimal envelope of full geometry")
         audits[code] = audit
         counts["rings"] += audit.ring_count
         counts["positions"] += audit.position_count
@@ -227,7 +233,7 @@ def validate_correspondence(source_root: Path, artifact_root: Path) -> Validatio
             require(by_code[code].name == EXCLUDED_MUNICIPALITIES[code], "source exclusion identity mismatch")
             continue
         converted = convert_polygon(shp, transformer, code=code)
-        require(index_bboxes.get(code) == geometry_bbox(converted), f"{code}: source/index bbox mismatch")
+        require(index_bboxes.get(code) == outward_bbox(converted), f"{code}: source/index bbox mismatch")
         expected = feature_document(by_code[code], converted.as_geojson(), catalog)
         actual = strict_json(artifact_root / f"2026/comuni/{code}.geojson")
         actual_geom = actual["features"][0].pop("geometry")

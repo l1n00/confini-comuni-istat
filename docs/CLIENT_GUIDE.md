@@ -3,6 +3,17 @@
 Questo documento descrive il comportamento atteso da un consumer. Non contiene
 un'integrazione pronta da copiare e non modifica l'app esistente.
 
+## Evoluzione del contratto indice
+
+- `schemaVersion: 1`: l'indice non contiene `bbox`; individualo e seleziona per nome.
+- `schemaVersion: 2`: ogni comune disponibile ha `municipalities[].bbox`, con
+  `dataset.bboxPrecisionDecimals: 6` e ordine
+  `dataset.bboxOrder: ["minLon", "minLat", "maxLon", "maxLat"]`.
+
+Per compatibilità, un client può continuare a richiedere solo nome, codice,
+regione e unità territoriale: `bbox` è un campo facoltativo. La versione 2
+consente inoltre il flusso spaziale descritto sotto.
+
 ## Flusso a cache vuota
 
 ```text
@@ -30,8 +41,11 @@ Flusso alternativo per punti del progetto [longitudine, latitudine]:
 ```
 
 Il bbox comprende tutte le componenti di Polygon e MultiPolygon, comprese le
-isole. I punti sul bordo del riquadro sono candidati; la geometria decide il
-risultato definitivo. La ricerca per nome continua a usare il flusso originale.
+isole. Viene arrotondato verso l'esterno a 6 decimali: ovest e sud per difetto,
+est e nord per eccesso, con un errore massimo di circa 11 cm. Il riquadro
+pubblicato contiene quindi necessariamente tutta la geometria. I punti sul bordo
+del riquadro sono candidati; la geometria decide il risultato definitivo. La
+ricerca per nome continua a usare il flusso originale.
 
 Non usare somiglianza o punteggio fuzzy per scegliere automaticamente un nome.
 Se l'app conosce il nome ma non regione/provincia, gli omonimi devono restare

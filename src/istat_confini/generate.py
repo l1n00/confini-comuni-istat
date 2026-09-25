@@ -11,7 +11,7 @@ from pyproj import Transformer
 from .config import SOURCE_PAGE, ARCHIVE_URL, LICENSE_URL, ATTRIBUTION, MODIFICATIONS
 from .config import EXCLUDED_MUNICIPALITIES, exclusion_metadata
 from .errors import SourceValidationError
-from .geometry import convert_polygon, geometry_bbox
+from .geometry import convert_polygon, outward_bbox
 from .manifest import SourceManifest, build_source_manifest, write_source_manifest, write_utf8_json
 from .source import load_source_catalog, iter_source_polygons
 
@@ -39,7 +39,9 @@ def index_entry(m, bbox):
 
 def index_document(catalog, stamp, bboxes):
     included = [m for m in catalog.municipalities if m.code not in EXCLUDED_MUNICIPALITIES]
-    return {"schemaVersion": 1, "dataset": {
+    return {"schemaVersion": 2, "dataset": {
+        "bboxPrecisionDecimals": 6,
+        "bboxOrder": ["minLon", "minLat", "maxLon", "maxLat"],
         "referenceYear": 2026, "referenceDate": "2026-01-01",
         "sourceDbfExportDate": catalog.source_dbf_export_date.isoformat(),
         "recordCount": len(included), "sourceRecordCount": len(catalog.municipalities),
@@ -92,7 +94,7 @@ def generate_dataset(source_root: Path, output_root: Path, generated_at: datetim
                     raise SourceValidationError(f"excluded municipality identity changed: {code}")
                 continue
             converted = convert_polygon(shp, transformer, code=code)
-            bboxes[code] = geometry_bbox(converted)
+            bboxes[code] = outward_bbox(converted)
             write_utf8_json(target / f"{code}.geojson", feature_document(by_code[code], converted.as_geojson(), catalog))
         if seen != by_code.keys():
             raise SourceValidationError("missing source geometries")

@@ -65,6 +65,20 @@ def geometry_bbox(converted):
     return validate_bbox([min_lon, min_lat, max_lon, max_lat], code="geometry")
 
 
+def outward_bbox(converted, decimals=6):
+    if type(decimals) is not int or not 0 <= decimals <= 15:
+        raise GeometryValidationError("bbox decimals must be an integer between 0 and 15")
+    scale = 10 ** decimals
+    min_lon, min_lat, max_lon, max_lat = geometry_bbox(converted)
+    rounded = [math.floor(min_lon*scale)/scale, math.floor(min_lat*scale)/scale,
+               math.ceil(max_lon*scale)/scale, math.ceil(max_lat*scale)/scale]
+    require_contains = (rounded[0] <= min_lon and rounded[1] <= min_lat and
+                        rounded[2] >= max_lon and rounded[3] >= max_lat)
+    if not require_contains:
+        raise GeometryValidationError("outward bbox rounded inside geometry")
+    return validate_bbox(rounded, code="geometry")
+
+
 def convert_polygon(shape, transformer, *, code):
     def fail(reason):
         raise GeometryValidationError(f"{code}: {reason}")
