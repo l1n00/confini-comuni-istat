@@ -1,0 +1,16 @@
+.venv/
+.tools/
+.execution/
+.pytest_cache/
+__pycache__/
+*.pyc
+*.egg-info/
+*.zip
+*.shp
+*.shx
+*.dbf
+*.prj
+.env*
+.generation-*/
+reports/build-failure.json
+reports/source-audit*.json

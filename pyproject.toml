@@ -1,0 +1,14 @@
+[project]
+name = "istat-confini"
+version = "0.1.0"
+description = "Full-detail ISTAT municipal boundaries as a static GeoJSON API"
+requires-python = ">=3.12,<3.13"
+dependencies = ["pyshp==2.3.1", "pyproj==3.7.1", "Shapely==2.0.6"]
+
+[project.optional-dependencies]
+test = ["pytest==8.3.5"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+addopts = "-ra"

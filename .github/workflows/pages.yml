@@ -1,0 +1,47 @@
+name: Publish validated municipal boundaries
+'on':
+  workflow_dispatch:
+    inputs:
+      confirm_publication:
+        description: Type I_APPROVED_PUBLICATION
+        required: true
+        type: string
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+concurrency:
+  group: pages
+  cancel_in_progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Require explicit confirmation
+        run: test "${{ github.event.inputs.confirm_publication }}" = I_APPROVED_PUBLICATION
+      - name: Checkout reviewed repository
+        uses: actions/checkout@v4
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install exact dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Run tests
+        run: python -m pytest -q
+      - name: Validate locally verified artifact identity
+        env:
+          PYTHONPATH: src
+        run: python -m istat_confini.cli verify-release --project-root .
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload reviewed dist
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
