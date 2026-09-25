@@ -14,3 +14,4 @@ __pycache__/
 .generation-*/
 reports/build-failure.json
 reports/source-audit*.json
+reports/source-exclusions*.json
