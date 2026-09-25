@@ -27,6 +27,8 @@ def test_workflow_has_only_manual_confirmation_gated_source_free_path():
     assert "Downloads" not in text
     assert "istat_confini.cli build" not in text
     assert "path: dist" in text
+    assert "  group: pages\n  cancel-in-progress: false" in text
+    assert "cancel_in_progress" not in text
     assert "verify-release --project-root ." in text
     assert "upload-pages-artifact" in text
 
