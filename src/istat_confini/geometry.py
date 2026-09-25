@@ -39,6 +39,32 @@ def _valid(geom, code, stage):
         raise GeometryValidationError(f"{code}: {stage}: {explain_validity(geom)}")
 
 
+def validate_bbox(bbox, *, code):
+    if (not isinstance(bbox, (list, tuple)) or len(bbox) != 4 or
+            any(type(value) not in (int, float) for value in bbox)):
+        raise GeometryValidationError(f"{code}: bbox must contain four numeric values")
+    min_lon, min_lat, max_lon, max_lat = bbox
+    if not all(math.isfinite(value) for value in bbox):
+        raise GeometryValidationError(f"{code}: non-finite bbox")
+    if not (-180 <= min_lon <= max_lon <= 180 and -90 <= min_lat <= max_lat <= 90):
+        raise GeometryValidationError(f"{code}: bbox outside longitude/latitude bounds or incorrectly ordered")
+    return [min_lon, min_lat, max_lon, max_lat]
+
+
+def geometry_bbox(converted):
+    coordinates = converted.coordinates
+    rings = (coordinates if converted.geometry_type == "Polygon"
+             else tuple(ring for polygon in coordinates for ring in polygon))
+    points = (point for ring in rings for point in ring)
+    first_x, first_y = next(points)
+    min_lon = max_lon = first_x
+    min_lat = max_lat = first_y
+    for lon, lat in points:
+        min_lon, max_lon = min(min_lon, lon), max(max_lon, lon)
+        min_lat, max_lat = min(min_lat, lat), max(max_lat, lat)
+    return validate_bbox([min_lon, min_lat, max_lon, max_lat], code="geometry")
+
+
 def convert_polygon(shape, transformer, *, code):
     def fail(reason):
         raise GeometryValidationError(f"{code}: {reason}")

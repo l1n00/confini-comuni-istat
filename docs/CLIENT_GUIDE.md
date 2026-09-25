@@ -17,7 +17,21 @@ un'integrazione pronta da copiare e non modifica l'app esistente.
 7. Se nessun risultato, informa che il nome non è disponibile.
 8. Prima di richiedere il GeoJSON, controlla che il codice sia una stringa di
    sei cifre e non uno dei codici in dataset.excludedMunicipalities.
+
+Flusso alternativo per punti del progetto [longitudine, latitudine]:
+
+1. Per ogni municipalities[].bbox, formato
+   [minLon, minLat, maxLon, maxLat], considera candidato il comune quando
+   minLon <= lon <= maxLon e minLat <= lat <= maxLat.
+2. Scarica soltanto i GeoJSON dei candidati.
+3. Applica ai loro confini il controllo preciso punto-in-poligono; il bbox è
+   solo un filtro rapido e può includere falsi positivi.
+4. Rimuovi i duplicati per codice e usa quei comuni per la selezione finale.
 ```
+
+Il bbox comprende tutte le componenti di Polygon e MultiPolygon, comprese le
+isole. I punti sul bordo del riquadro sono candidati; la geometria decide il
+risultato definitivo. La ricerca per nome continua a usare il flusso originale.
 
 Non usare somiglianza o punteggio fuzzy per scegliere automaticamente un nome.
 Se l'app conosce il nome ma non regione/provincia, gli omonimi devono restare

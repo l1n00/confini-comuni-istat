@@ -64,6 +64,13 @@ def verify(base_url, opener=urllib_opener):
         raise ValueError("index is not strict UTF-8 JSON") from exc
     rows = index["municipalities"]
     require(index["dataset"]["recordCount"] == len(rows), "index count mismatch")
+    for row in rows:
+        bbox = row["bbox"]
+        require(isinstance(bbox, list) and len(bbox) == 4 and
+                all(type(value) in (int, float) and re.fullmatch(r"-?\d+(?:\.\d+)?", str(value))
+                    for value in bbox) and
+                -180 <= bbox[0] <= bbox[2] <= 180 and -90 <= bbox[1] <= bbox[3] <= 90,
+                f"invalid index bbox for {row.get('code')}")
     codes = {row["code"] for row in rows}
     for code in KNOWN_CODES:
         require(code in codes, f"representative code absent from index: {code}")

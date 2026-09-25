@@ -17,7 +17,7 @@ from .config import SOURCE_COMPONENTS, PUBLISHED_COUNTS, LICENSE_URL
 from .config import EXCLUDED_MUNICIPALITIES, EXCLUSION_REASON
 from .errors import ArtifactValidationError
 from .generate import feature_document, index_document
-from .geometry import GeometryAudit, convert_polygon, signed_area
+from .geometry import ConvertedGeometry, GeometryAudit, convert_polygon, geometry_bbox, signed_area, validate_bbox
 from .manifest import SourceFile, canonical_manifest_bytes, build_source_manifest
 from .source import read_source_catalog, enforce_national_source_counts, iter_source_polygons
 
@@ -125,11 +125,12 @@ def _inspect(root):
             and dataset["license"]["url"] == LICENSE_URL, "index provenance")
     by_code = {}
     for row in rows:
-        require(set(row) == {"name", "code", "region", "territorialUnit"}, "index entry schema")
+        require(set(row) == {"name", "code", "region", "territorialUnit", "bbox"}, "index entry schema")
         code = row["code"]
         require(isinstance(code, str) and re.fullmatch("[0-9]{6}", code) and code not in by_code, "duplicate/invalid index code")
         require(code not in EXCLUDED_MUNICIPALITIES, f"{code}: excluded code advertised as available")
         require(isinstance(row["name"], str) and row["name"], f"{code}: blank name")
+        validate_bbox(row["bbox"], code=code)
         for key, width in (("region", 2), ("territorialUnit", 3)):
             entry = row[key]
             require(set(entry) == {"name", "code"} and isinstance(entry["name"], str) and entry["name"]
@@ -162,6 +163,19 @@ def _inspect(root):
         require(meta["sourceManifestSha256"] == manifest["sha256"] and meta["license"] == LICENSE_URL
                 and meta["referenceDate"] == "2026-01-01" and meta["attribution"] and meta["modifications"], f"{code}: provenance")
         audit = inspect_geometry(feature["geometry"], code)
+        raw_coordinates = feature["geometry"]["coordinates"]
+        if feature["geometry"]["type"] == "Polygon":
+            normalized_coordinates = tuple(tuple(tuple(point) for point in ring)
+                                          for ring in raw_coordinates)
+        else:
+            normalized_coordinates = tuple(tuple(tuple(tuple(point) for point in ring)
+                                                for ring in polygon)
+                                          for polygon in raw_coordinates)
+        normalized_geometry = ConvertedGeometry(
+            feature["geometry"]["type"], normalized_coordinates, audit
+        )
+        require(row["bbox"] == geometry_bbox(normalized_geometry),
+                f"{code}: index bbox does not match full geometry")
         audits[code] = audit
         counts["rings"] += audit.ring_count
         counts["positions"] += audit.position_count
@@ -201,7 +215,8 @@ def validate_correspondence(source_root: Path, artifact_root: Path) -> Validatio
     catalog = read_source_catalog(source_root)
     result, index, manifest, _ = _checked_inspect(artifact_root)
     require(result.source_manifest_sha256 == catalog.manifest.sha256, "source manifest mismatch")
-    require(index == index_document(catalog, index["dataset"]["generatedAt"]), "source/index mismatch")
+    index_bboxes = {row["code"]: row["bbox"] for row in index["municipalities"]}
+    require(index == index_document(catalog, index["dataset"]["generatedAt"], index_bboxes), "source/index mismatch")
     by_code = {m.code: m for m in catalog.municipalities}
     transformer = Transformer.from_crs(32632, 4326, always_xy=True)
     seen = set()
@@ -212,6 +227,7 @@ def validate_correspondence(source_root: Path, artifact_root: Path) -> Validatio
             require(by_code[code].name == EXCLUDED_MUNICIPALITIES[code], "source exclusion identity mismatch")
             continue
         converted = convert_polygon(shp, transformer, code=code)
+        require(index_bboxes.get(code) == geometry_bbox(converted), f"{code}: source/index bbox mismatch")
         expected = feature_document(by_code[code], converted.as_geojson(), catalog)
         actual = strict_json(artifact_root / f"2026/comuni/{code}.geojson")
         actual_geom = actual["features"][0].pop("geometry")

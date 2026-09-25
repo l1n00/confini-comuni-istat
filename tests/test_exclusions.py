@@ -20,6 +20,8 @@ def test_only_approved_code_is_omitted_and_disclosed(excluded_fixture):
     generate.generate_dataset(source, out, STAMP)
     index = json.loads((out / "2026/index.json").read_bytes())
     assert [m["code"] for m in index["municipalities"]] == ["040012"]
+    assert index["municipalities"][0]["bbox"] == [9.012721901637061, 45.153476326014676,
+                                                    9.013994312072084, 45.154376643132615]
     assert not (out / "2026/comuni/072001.geojson").exists()
     assert index["dataset"]["sourceRecordCount"] == 2
     assert index["dataset"]["recordCount"] == 1

@@ -4,15 +4,15 @@ Not published. Size eligibility is not publication approval.
 
 - Full source validation: passed
 - Source manifest SHA-256: `70ac8256c4785dc6ed2814c32b6965ae76f9161b51abaa1660059e1c6cbd8ca6`
-- Artifact SHA-256: `9d27469ac3616d0f80296d2638af3540995941b26930782aba316ba3c5c8bcb2`
+- Artifact SHA-256: `a0b9cb4b5db909e0e47489920dcab6076155151fcbdfa5a541c0bf4e2ceec9c6`
 - Municipal files: 7891
-- Index bytes: 1,043,037
-- API bytes: 278,149,989
-- Pages artifact bytes: 278,151,740
-- Repository candidate bytes (excluding reports): 278,246,925
-- Gzip-9 estimate: 116,812,338 bytes (sum of per-file gzip-9 sizes; estimate, not a served encoding or archive)
-- Full dataset downloads per soft 100 GB: 359 raw; 856 estimated gzip
-- Build / validation seconds: 116.18 / 174.34
+- Index bytes: 1,691,907
+- API bytes: 278,798,859
+- Pages artifact bytes: 278,800,610
+- Repository candidate bytes (excluding reports): 278,902,510
+- Gzip-9 estimate: 117,117,276 bytes (sum of per-file gzip-9 sizes; estimate, not a served encoding or archive)
+- Full dataset downloads per soft 100 GB: 358 raw; 853 estimated gzip
+- Build / validation seconds: 132.48 / 183.84
 - Pages size decision: preferred
 
 ## Per-municipality bytes

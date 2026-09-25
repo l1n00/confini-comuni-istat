@@ -11,7 +11,7 @@ from pyproj import Transformer
 from .config import SOURCE_PAGE, ARCHIVE_URL, LICENSE_URL, ATTRIBUTION, MODIFICATIONS
 from .config import EXCLUDED_MUNICIPALITIES, exclusion_metadata
 from .errors import SourceValidationError
-from .geometry import convert_polygon
+from .geometry import convert_polygon, geometry_bbox
 from .manifest import SourceManifest, build_source_manifest, write_source_manifest, write_utf8_json
 from .source import load_source_catalog, iter_source_polygons
 
@@ -30,13 +30,14 @@ def assert_disjoint(first: Path, second: Path):
         raise ValueError("source/output/report paths must not overlap")
 
 
-def index_entry(m):
+def index_entry(m, bbox):
     return {"name": m.name, "code": m.code,
             "region": {"code": m.region_code, "name": m.region_name},
-            "territorialUnit": {"code": m.territorial_unit_code, "name": m.territorial_unit_name}}
+            "territorialUnit": {"code": m.territorial_unit_code, "name": m.territorial_unit_name},
+            "bbox": bbox}
 
 
-def index_document(catalog, stamp):
+def index_document(catalog, stamp, bboxes):
     included = [m for m in catalog.municipalities if m.code not in EXCLUDED_MUNICIPALITIES]
     return {"schemaVersion": 1, "dataset": {
         "referenceYear": 2026, "referenceDate": "2026-01-01",
@@ -49,7 +50,7 @@ def index_document(catalog, stamp):
         "generatedAt": stamp,
         "license": {"name": "Creative Commons Attribution 4.0 International", "url": LICENSE_URL},
         "attribution": ATTRIBUTION, "modifications": MODIFICATIONS,
-    }, "municipalities": [index_entry(m) for m in included]}
+    }, "municipalities": [index_entry(m, bboxes[m.code]) for m in included]}
 
 
 def feature_document(m, geometry, catalog):
@@ -81,7 +82,7 @@ def generate_dataset(source_root: Path, output_root: Path, generated_at: datetim
     try:
         target = staging / "2026/comuni"
         target.mkdir(parents=True)
-        seen = set()
+        seen, bboxes = set(), {}
         for code, shp in iter_source_polygons(source_root):
             if code not in by_code or code in seen:
                 raise SourceValidationError(f"geometry identity mismatch: {code}")
@@ -91,10 +92,11 @@ def generate_dataset(source_root: Path, output_root: Path, generated_at: datetim
                     raise SourceValidationError(f"excluded municipality identity changed: {code}")
                 continue
             converted = convert_polygon(shp, transformer, code=code)
+            bboxes[code] = geometry_bbox(converted)
             write_utf8_json(target / f"{code}.geojson", feature_document(by_code[code], converted.as_geojson(), catalog))
         if seen != by_code.keys():
             raise SourceValidationError("missing source geometries")
-        write_utf8_json(staging / "2026/index.json", index_document(catalog, stamp))
+        write_utf8_json(staging / "2026/index.json", index_document(catalog, stamp, bboxes))
         write_source_manifest(staging / "source-manifest.json", catalog.manifest)
         for path in staging.rglob("*"):
             if path.is_file():

@@ -35,7 +35,7 @@ def test_workflow_has_only_manual_confirmation_gated_source_free_path():
 
 def test_verifier_accepts_complete_mocked_server():
     module = load_script()
-    index = {"dataset": {"recordCount": 6}, "municipalities": [{"code": code} for code in
+    index = {"dataset": {"recordCount": 6}, "municipalities": [{"code": code, "bbox": [9.0, 45.0, 10.0, 46.0]} for code in
                ("001235", "022165", "113012", "001059", "058091", "040012")]}
     responses = {"https://owner.github.io/repo/2026/index.json":
                  (200, "application/json; charset=utf-8", json.dumps(index).encode())}
@@ -53,10 +53,13 @@ def test_verifier_accepts_complete_mocked_server():
     assert result == {"index": 6, "representativeFiles": 6, "unknownFiles": 2}
 
 
-@pytest.mark.parametrize("mutation", ["http", "status", "media", "cors", "validator", "immutable", "body", "redirect"])
+@pytest.mark.parametrize("mutation", ["http", "status", "media", "cors", "validator", "immutable", "body", "redirect", "bbox"])
 def test_verifier_rejects_each_publication_failure(mutation):
     module = load_script()
-    index = {"dataset": {"recordCount": 1}, "municipalities": [{"code": "001235"}]}
+    index = {"dataset": {"recordCount": 1}, "municipalities": [{"code": "001235", "bbox": [9.0, 45.0, 10.0, 46.0]}]}
+    if mutation == "bbox":
+        index["municipalities"][0]["bbox"] = [10.0, 46.0, 9.0, 45.0]
+        index_body = json.dumps(index).encode()
     status, kind, body = 200, "application/geo+json", b'{"type":"FeatureCollection"}'
     headers = {"Content-Type": kind, "Access-Control-Allow-Origin": "*", "ETag": '"test"'}
     if mutation == "http": index_body = b"x"

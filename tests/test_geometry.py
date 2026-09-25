@@ -57,6 +57,20 @@ def test_invalid_geometry_fails_without_repair_and_names_code(rings):
         api().convert_polygon(polygon(rings), IDENTITY, code="001235")
 
 
+def test_bbox_covers_multipolygon_and_distant_island():
+    outer1, outer2 = clockwise(0, 0, 2), clockwise(20, 0, 2)
+    result = api().convert_polygon(polygon([outer1, outer2]), IDENTITY, code="113012")
+    assert api().geometry_bbox(result) == [0.0, 0.0, 22.0, 2.0]
+
+
+def test_bbox_rejects_non_finite_or_out_of_range_values():
+    converted = api().convert_polygon(polygon([clockwise(0, 0, 2)]), IDENTITY, code="001235")
+    for bad in ([float("nan"), 0.0, 2.0, 2.0], [0.0, -91.0, 2.0, 2.0],
+                [3.0, 0.0, 2.0, 2.0], [0.0, 2.0, 2.0, 1.0]):
+        with pytest.raises(ValueError):
+            api().validate_bbox(bad, code="001235")
+
+
 def test_projected_large_values_keep_small_ring_orientation():
     ring = clockwise(1000000, 5000000, .01)
     assert api().signed_area(ring) < 0

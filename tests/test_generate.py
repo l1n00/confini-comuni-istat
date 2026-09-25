@@ -30,6 +30,7 @@ def test_exact_contract_unicode_and_deterministic_bytes(tmp_path, monkeypatch):
     assert index["municipalities"][0] == {
         "name": "Samone", "code": "001235", "region": {"code": "01", "name": "Piemonte"},
         "territorialUnit": {"code": "201", "name": "Torino"},
+        "bbox": [9.0, 45.153477176270556, 9.001272210207242, 45.15437735170131],
     }
     raw = (tmp_path / "a/2026/comuni/040012.geojson").read_bytes()
     assert "Forlì".encode() in raw and not raw.startswith(b"\xef\xbb\xbf")

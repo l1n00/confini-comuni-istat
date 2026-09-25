@@ -37,6 +37,16 @@ GET https://l1n00.github.io/confini-comuni-istat/2026/comuni/{codice-6-cifre}.ge
    `territorialUnit` oppure mostra i candidati all'utente.
 3. Scarica soltanto il GeoJSON del codice selezionato.
 
+Ogni voce dell'indice contiene anche:
+
+```json
+"bbox": [minLon, minLat, maxLon, maxLat]
+```
+
+Per cercare i comuni che contengono i punti del progetto, usa il bbox come
+filtro rapido, scarica i soli GeoJSON candidati e applica il controllo preciso
+punto-in-poligono. Il bbox da solo può produrre falsi positivi.
+
 I codici sono stringhe: `001235` non deve diventare `1235`. I cinque comuni
 esclusi non hanno file. I percorsi `/2026` possono essere corretti dopo una
 revisione ISTAT: usa `ETag`/`Last-Modified`, non una cache permanente basata
