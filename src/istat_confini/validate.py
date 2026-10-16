@@ -1,4 +1,4 @@
-"""Strict artifact inspection plus source correspondence; never repairs geometry."""
+"""Strict artifact inspection plus source correspondence; never repairs geometry itself."""
 from collections import Counter
 from dataclasses import dataclass
 from datetime import datetime
@@ -13,11 +13,11 @@ from pyproj import Transformer
 from shapely.geometry import shape
 from shapely.validation import explain_validity
 
-from .config import SOURCE_COMPONENTS, PUBLISHED_COUNTS, LICENSE_URL
-from .config import EXCLUDED_MUNICIPALITIES, EXCLUSION_REASON
+from .config import SOURCE_COMPONENTS, UNREPAIRED_COUNTS, LICENSE_URL
+from .config import REPAIRED_MUNICIPALITIES, REPAIR_REASON, REPAIR_METHOD
 from .errors import ArtifactValidationError
-from .generate import feature_document, index_document
-from .geometry import ConvertedGeometry, GeometryAudit, convert_polygon, geometry_bbox, outward_bbox, signed_area, validate_bbox
+from .generate import convert_source, feature_document, index_document
+from .geometry import ConvertedGeometry, GeometryAudit, geometry_bbox, outward_bbox, signed_area, validate_bbox
 from .manifest import SourceFile, canonical_manifest_bytes, build_source_manifest
 from .source import read_source_catalog, enforce_national_source_counts, iter_source_polygons
 
@@ -109,16 +109,18 @@ def _inspect(root):
     require(dataset["bboxPrecisionDecimals"] == 6 and
             dataset["bboxOrder"] == ["minLon", "minLat", "maxLon", "maxLat"],
             "bbox contract metadata")
-    exclusions = dataset["excludedMunicipalities"]
-    require(isinstance(exclusions, list), "exclusion list schema")
-    excluded_codes = set()
-    for entry in exclusions:
-        require(set(entry) == {"code", "name", "reason"} and entry["code"] not in excluded_codes
-                and entry["code"] in EXCLUDED_MUNICIPALITIES
-                and entry["name"] == EXCLUDED_MUNICIPALITIES[entry["code"]]
-                and entry["reason"] == EXCLUSION_REASON, "unapproved or incorrect exclusion")
-        excluded_codes.add(entry["code"])
-    require(dataset["sourceRecordCount"] == len(rows) + len(exclusions), "source/published count accounting")
+    require(dataset["excludedMunicipalities"] == [], "no municipality may be excluded")
+    repairs = dataset["repairedMunicipalities"]
+    require(isinstance(repairs, list), "repair list schema")
+    repaired_codes = set()
+    for entry in repairs:
+        require(set(entry) == {"code", "name", "reason", "method"} and entry["code"] not in repaired_codes
+                and entry["code"] in REPAIRED_MUNICIPALITIES
+                and entry["name"] == REPAIRED_MUNICIPALITIES[entry["code"]]
+                and entry["reason"] == REPAIR_REASON and entry["method"] == REPAIR_METHOD,
+                "unapproved or incorrect repair")
+        repaired_codes.add(entry["code"])
+    require(dataset["sourceRecordCount"] == len(rows), "source/published count accounting")
     stamp = datetime.fromisoformat(dataset["generatedAt"].replace("Z", "+00:00"))
     require(stamp.tzinfo is not None, "timestamp timezone")
     require(dataset["sourceManifestSha256"] == manifest["sha256"], "manifest/index mismatch")
@@ -131,7 +133,6 @@ def _inspect(root):
         require(set(row) == {"name", "code", "region", "territorialUnit", "bbox"}, "index entry schema")
         code = row["code"]
         require(isinstance(code, str) and re.fullmatch("[0-9]{6}", code) and code not in by_code, "duplicate/invalid index code")
-        require(code not in EXCLUDED_MUNICIPALITIES, f"{code}: excluded code advertised as available")
         require(isinstance(row["name"], str) and row["name"], f"{code}: blank name")
         validate_bbox(row["bbox"], code=code)
         for key, width in (("region", 2), ("territorialUnit", 3)):
@@ -229,10 +230,7 @@ def validate_correspondence(source_root: Path, artifact_root: Path) -> Validatio
     for code, shp in iter_source_polygons(source_root):
         require(code in by_code and code not in seen, "source geometry code coverage")
         seen.add(code)
-        if code in EXCLUDED_MUNICIPALITIES:
-            require(by_code[code].name == EXCLUDED_MUNICIPALITIES[code], "source exclusion identity mismatch")
-            continue
-        converted = convert_polygon(shp, transformer, code=code)
+        converted = convert_source(shp, transformer, code=code, name=by_code[code].name)
         require(index_bboxes.get(code) == outward_bbox(converted), f"{code}: source/index bbox mismatch")
         expected = feature_document(by_code[code], converted.as_geojson(), catalog)
         actual = strict_json(artifact_root / f"2026/comuni/{code}.geojson")
@@ -247,10 +245,22 @@ def validate_correspondence(source_root: Path, artifact_root: Path) -> Validatio
 
 
 def _national(result, index, audits):
-    require(result.counts == PUBLISHED_COUNTS, f"published geometry/count baseline mismatch: {result.counts}")
+    unrepaired = dict(result.counts)
+    for key in ("municipalities", "indexEntries", "municipalityFiles"):
+        unrepaired[key] -= len(REPAIRED_MUNICIPALITIES)
+    for code in REPAIRED_MUNICIPALITIES:
+        require(code in audits, f"{code}: repaired municipality missing")
+        audit = audits[code]
+        unrepaired["rings"] -= audit.ring_count
+        unrepaired["positions"] -= audit.position_count
+        unrepaired["shapePartsOverOneRecords"] -= audit.ring_count > 1
+        unrepaired["multipartRecords"] -= audit.component_count > 1
+        unrepaired["holeRecords"] -= audit.hole_count > 0
+        unrepaired["interiorRings"] -= audit.hole_count
+    require(unrepaired == UNREPAIRED_COUNTS, f"published geometry/count baseline mismatch: {result.counts}")
     require(index["dataset"]["sourceRecordCount"] == 7896 and
-            {e["code"] for e in index["dataset"]["excludedMunicipalities"]} == EXCLUDED_MUNICIPALITIES.keys(),
-            "national source/exclusion count baseline")
+            {e["code"] for e in index["dataset"]["repairedMunicipalities"]} == REPAIRED_MUNICIPALITIES.keys(),
+            "national source/repair count baseline")
     require(audits["113012"].component_count == 69 and audits["001059"].hole_count == 3, "island/hole baseline")
     names = Counter(row["name"] for row in index["municipalities"])
     require({k: v for k, v in names.items() if v > 1} ==

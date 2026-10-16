@@ -1,10 +1,16 @@
-"""Convert raw rings without dropping, inserting, rounding or repairing vertices."""
+"""Convert raw rings without dropping, inserting, rounding or repairing vertices.
+
+The only exception is `convert_repaired_polygon`, used solely for the approved municipalities whose
+source rings self-intersect: it runs Shapely `make_valid` in the source projection and keeps every
+polygonal part of the result."""
 from dataclasses import dataclass
 import math
 
 from pyproj.exceptions import ProjError
 from shapely.geometry import Polygon, MultiPolygon
-from shapely.validation import explain_validity
+from shapely.geometry.polygon import orient
+from shapely.ops import unary_union
+from shapely.validation import explain_validity, make_valid
 
 from .errors import GeometryValidationError
 
@@ -79,20 +85,40 @@ def outward_bbox(converted, decimals=6):
     return validate_bbox(rounded, code="geometry")
 
 
-def convert_polygon(shape, transformer, *, code):
-    def fail(reason):
-        raise GeometryValidationError(f"{code}: {reason}")
-
+def _source_rings(shape, fail):
     offsets = list(shape.parts) + [len(shape.points)]
     if len(offsets) < 2 or offsets[0] != 0 or any(b <= a for a, b in zip(offsets, offsets[1:])):
         fail("empty or malformed polygon parts")
-    rings, shells, holes = [], [], []
+    rings = []
     for start, end in zip(offsets, offsets[1:]):
         ring = tuple(tuple(p) for p in shape.points[start:end])
         if len(ring) < 4 or ring[0] != ring[-1]:
             fail("unclosed or short ring")
         if any(len(p) != 2 or not all(math.isfinite(v) for v in p) for p in ring):
             fail("non-finite or non-2D position")
+        rings.append(ring)
+    return rings
+
+
+def _transform_ring(ring, transformer, fail):
+    try:
+        xs, ys = transformer.transform([p[0] for p in ring], [p[1] for p in ring], errcheck=True)
+    except ProjError as exc:
+        fail(f"projection error: {exc}")
+    transformed = tuple(zip(xs, ys))
+    if any(not math.isfinite(x) or not math.isfinite(y) or not -180 <= x <= 180 or not -90 <= y <= 90
+           for x, y in transformed):
+        fail("non-finite/out-of-range longitude or latitude")
+    return transformed
+
+
+def convert_polygon(shape, transformer, *, code):
+    def fail(reason):
+        raise GeometryValidationError(f"{code}: {reason}")
+
+    source_rings = _source_rings(shape, fail)
+    rings, shells, holes = [], [], []
+    for ring in source_rings:
         area = signed_area(ring)
         if area == 0:
             fail("zero-area ring")
@@ -115,14 +141,7 @@ def convert_polygon(shape, transformer, *, code):
     _valid(polygons[0] if len(polygons) == 1 else MultiPolygon(polygons), code, "source polygon")
     converted = []
     for i, ring in enumerate(rings):
-        try:
-            xs, ys = transformer.transform([p[0] for p in ring], [p[1] for p in ring], errcheck=True)
-        except ProjError as exc:
-            fail(f"projection error: {exc}")
-        transformed = tuple(zip(xs, ys))
-        if any(not math.isfinite(x) or not math.isfinite(y) or not -180 <= x <= 180 or not -90 <= y <= 90
-               for x, y in transformed):
-            fail("non-finite/out-of-range longitude or latitude")
+        transformed = _transform_ring(ring, transformer, fail)
         area = signed_area(transformed)
         if area == 0:
             fail("zero-area transformed ring")
@@ -135,3 +154,62 @@ def convert_polygon(shape, transformer, *, code):
     audit = GeometryAudit(len(shells), len(rings), sum(map(len, rings)), len(holes))
     return ConvertedGeometry("Polygon" if len(shells) == 1 else "MultiPolygon",
                              coordinates[0] if len(shells) == 1 else coordinates, audit)
+
+
+# Largest accepted change of area between the source rings and their repair.
+REPAIR_MAX_AREA_CHANGE = 0.001
+
+
+def _polygonal_parts(geom):
+    if isinstance(geom, Polygon):
+        return [geom]
+    return [part for g in getattr(geom, "geoms", ()) for part in _polygonal_parts(g)]
+
+
+def convert_repaired_polygon(shape, transformer, *, code):
+    """Repair self-intersecting source rings with `make_valid` in the source projection, then convert.
+
+    Exteriors (clockwise in the shapefile) are unioned and holes subtracted; only polygonal parts of
+    the result are kept. The repaired area must stay within `REPAIR_MAX_AREA_CHANGE` of the source."""
+    def fail(reason):
+        raise GeometryValidationError(f"{code}: {reason}")
+
+    shells, holes, source_area = [], [], 0.0
+    for ring in _source_rings(shape, fail):
+        area = signed_area(ring)
+        if area == 0:
+            fail("zero-area ring")
+        source_area -= area
+        (shells if area < 0 else holes).append(make_valid(Polygon(ring)))
+    if not shells:
+        fail("no exterior ring")
+    repaired = unary_union(shells)
+    if holes:
+        repaired = repaired.difference(unary_union(holes))
+    parts = [orient(p, sign=1.0) for p in _polygonal_parts(make_valid(repaired)) if p.area > 0]
+    if not parts:
+        fail("repair produced no polygon")
+    repaired_area = math.fsum(p.area for p in parts)
+    if source_area <= 0 or abs(repaired_area - source_area) > REPAIR_MAX_AREA_CHANGE * source_area:
+        fail(f"repair changed area beyond tolerance: {source_area} -> {repaired_area}")
+
+    coordinates = []
+    for part in parts:
+        rings = []
+        for i, ring in enumerate([part.exterior, *part.interiors]):
+            transformed = _transform_ring(tuple(ring.coords), transformer, fail)
+            area = signed_area(transformed)
+            if area == 0:
+                fail("zero-area transformed ring")
+            if (i == 0) != (area > 0):
+                transformed = tuple(reversed(transformed))
+            rings.append(transformed)
+        coordinates.append(tuple(rings))
+    coordinates = tuple(coordinates)
+    polygons = [Polygon(p[0], p[1:]) for p in coordinates]
+    _valid(polygons[0] if len(polygons) == 1 else MultiPolygon(polygons), code, "repaired polygon")
+    ring_count = sum(len(p) for p in coordinates)
+    audit = GeometryAudit(len(coordinates), ring_count, sum(len(r) for p in coordinates for r in p),
+                          ring_count - len(coordinates))
+    return ConvertedGeometry("Polygon" if len(coordinates) == 1 else "MultiPolygon",
+                             coordinates[0] if len(coordinates) == 1 else coordinates, audit)

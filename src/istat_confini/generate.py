@@ -9,9 +9,9 @@ import time
 from pyproj import Transformer
 
 from .config import SOURCE_PAGE, ARCHIVE_URL, LICENSE_URL, ATTRIBUTION, MODIFICATIONS
-from .config import EXCLUDED_MUNICIPALITIES, exclusion_metadata
+from .config import REPAIRED_MUNICIPALITIES, REPAIR_MODIFICATION, modifications_for, repair_metadata
 from .errors import SourceValidationError
-from .geometry import convert_polygon, outward_bbox
+from .geometry import convert_polygon, convert_repaired_polygon, outward_bbox
 from .manifest import SourceManifest, build_source_manifest, write_source_manifest, write_utf8_json
 from .source import load_source_catalog, iter_source_polygons
 
@@ -37,21 +37,36 @@ def index_entry(m, bbox):
             "bbox": bbox}
 
 
+def index_modifications(catalog):
+    repaired = any(m.code in REPAIRED_MUNICIPALITIES for m in catalog.municipalities)
+    return MODIFICATIONS + [REPAIR_MODIFICATION] if repaired else MODIFICATIONS
+
+
+def convert_source(shp, transformer, *, code, name):
+    """Converts one source shape; only the approved codes go through the repair."""
+    if code in REPAIRED_MUNICIPALITIES:
+        if name != REPAIRED_MUNICIPALITIES[code]:
+            raise SourceValidationError(f"repaired municipality identity changed: {code}")
+        return convert_repaired_polygon(shp, transformer, code=code)
+    return convert_polygon(shp, transformer, code=code)
+
+
 def index_document(catalog, stamp, bboxes):
-    included = [m for m in catalog.municipalities if m.code not in EXCLUDED_MUNICIPALITIES]
+    included = list(catalog.municipalities)
     return {"schemaVersion": 2, "dataset": {
         "bboxPrecisionDecimals": 6,
         "bboxOrder": ["minLon", "minLat", "maxLon", "maxLat"],
         "referenceYear": 2026, "referenceDate": "2026-01-01",
         "sourceDbfExportDate": catalog.source_dbf_export_date.isoformat(),
         "recordCount": len(included), "sourceRecordCount": len(catalog.municipalities),
-        "excludedMunicipalities": exclusion_metadata(catalog.municipalities),
+        "excludedMunicipalities": [],
+        "repairedMunicipalities": repair_metadata(catalog.municipalities),
         "sourceVariant": "non-generalized extracted shapefiles", "sourcePage": SOURCE_PAGE,
         "upstreamArchiveUrl": ARCHIVE_URL, "sourceManifestFile": "source-manifest.json",
         "sourceManifestFileCount": 12, "sourceManifestSha256": catalog.manifest.sha256,
         "generatedAt": stamp,
         "license": {"name": "Creative Commons Attribution 4.0 International", "url": LICENSE_URL},
-        "attribution": ATTRIBUTION, "modifications": MODIFICATIONS,
+        "attribution": ATTRIBUTION, "modifications": index_modifications(catalog),
     }, "municipalities": [index_entry(m, bboxes[m.code]) for m in included]}
 
 
@@ -60,7 +75,7 @@ def feature_document(m, geometry, catalog):
         "code": m.code, "referenceDate": "2026-01-01",
         "sourceDbfExportDate": catalog.source_dbf_export_date.isoformat(),
         "upstreamArchiveUrl": ARCHIVE_URL, "sourceManifestSha256": catalog.manifest.sha256,
-        "license": LICENSE_URL, "attribution": ATTRIBUTION, "modifications": MODIFICATIONS,
+        "license": LICENSE_URL, "attribution": ATTRIBUTION, "modifications": modifications_for(m.code),
     }, "features": [{"type": "Feature", "id": m.code, "properties": {
         "code": m.code, "name": m.name, "alternativeName": m.alternative_name,
         "regionCode": m.region_code, "regionName": m.region_name,
@@ -89,11 +104,7 @@ def generate_dataset(source_root: Path, output_root: Path, generated_at: datetim
             if code not in by_code or code in seen:
                 raise SourceValidationError(f"geometry identity mismatch: {code}")
             seen.add(code)
-            if code in EXCLUDED_MUNICIPALITIES:
-                if by_code[code].name != EXCLUDED_MUNICIPALITIES[code]:
-                    raise SourceValidationError(f"excluded municipality identity changed: {code}")
-                continue
-            converted = convert_polygon(shp, transformer, code=code)
+            converted = convert_source(shp, transformer, code=code, name=by_code[code].name)
             bboxes[code] = outward_bbox(converted)
             write_utf8_json(target / f"{code}.geojson", feature_document(by_code[code], converted.as_geojson(), catalog))
         if seen != by_code.keys():

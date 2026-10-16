@@ -92,3 +92,21 @@ def test_bbox_rejects_non_finite_or_out_of_range_values():
 def test_projected_large_values_keep_small_ring_orientation():
     ring = clockwise(1000000, 5000000, .01)
     assert api().signed_area(ring) < 0
+
+
+def test_repair_makes_self_intersecting_ring_valid_and_keeps_area():
+    from .factories import self_intersecting
+    ring = self_intersecting(0, -50, 100)
+    with pytest.raises(ValueError):
+        api().convert_polygon(polygon([ring]), IDENTITY, code="072040")
+    result = api().convert_repaired_polygon(polygon([ring]), IDENTITY, code="072040")
+    geom = geo_shape(result.as_geojson())
+    assert geom.is_valid
+    assert geom.area == pytest.approx(10000, rel=1e-3)
+    assert api().signed_area(result.coordinates[0]) > 0
+
+
+def test_repair_refuses_large_area_change():
+    bowtie = [(0, 0), (0, 100), (100, 0), (100, 100), (0, 0)]
+    with pytest.raises(ValueError, match="area"):
+        api().convert_repaired_polygon(polygon([bowtie]), IDENTITY, code="072040")
