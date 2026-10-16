@@ -62,7 +62,8 @@ solo sull'URL. Vedi `docs/CLIENT_GUIDE.md`.
 - CRS verificato dai `.prj`: WGS 84 / UTM zone 32N (`EPSG:32632`).
 - Output: WGS 84 longitudine/latitudine secondo RFC 7946.
 - Nessuna semplificazione (nessuna decimazione dei vertici), quantizzazione
-  deliberata, riparazione o rimozione per i comuni pubblicati.
+  deliberata o rimozione per i comuni pubblicati; nessuna riparazione, salvo i
+  cinque comuni dichiarati in `dataset.repairedMunicipalities`.
 - Poligoni con isole e buchi interni mantenuti come `MultiPolygon`/`Polygon`.
 - Nomi e accenti UTF-8 senza BOM.
 - Ogni file contiene una sola `Feature`; il nome del file, `id`,
