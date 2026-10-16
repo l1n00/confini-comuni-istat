@@ -23,8 +23,14 @@ def polygon(rings):
     return shapefile.Shape(shapeType=shapefile.POLYGON, points=points, parts=parts)
 
 
+def self_intersecting(x=500000, y=5000000, side=100):
+    """Clockwise square whose bottom edge has a small crossing loop (like the five ISTAT sources)."""
+    return [(x, y), (x, y+side), (x+side, y+side), (x+side, y),
+            (x+52, y), (x+50, y+1), (x+51, y+1), (x+49, y), (x, y)]
+
+
 def make_source(root: Path, *, names=None, codes=None, region_keys=None, uts_keys=None,
-                municipal_regions=None, municipal_uts=None, fields=None):
+                municipal_regions=None, municipal_uts=None, fields=None, rings=None):
     names = ["Samone", "Forlì"] if names is None else names
     codes = ["001235", "040012"] if codes is None else codes
     region_keys = [1, 8] if region_keys is None else region_keys
@@ -39,7 +45,8 @@ def make_source(root: Path, *, names=None, codes=None, region_keys=None, uts_key
                 for field in (FIELDS if fields is None else fields):
                     writer.field(*field)
                 for i, (name, code) in enumerate(zip(names, codes)):
-                    writer.shape(polygon([clockwise(500000 + i * 1000)]))
+                    custom = (rings or {}).get(i)
+                    writer.shape(polygon(custom if custom else [clockwise(500000 + i * 1000)]))
                     writer.record(1, municipal_regions[i], 1, 0, municipal_uts[i],
                                   int(code or "0"), code, name, "", 0, 0, 0)
             else:

@@ -13,8 +13,8 @@ Prima di qualsiasi pubblicazione, registra nell'handoff:
 - test locale completo e relativo conteggio;
 - `sourceBeforeSha256 == sourceAfterSha256`;
 - `artifactSha256` prodotto dal report completo;
-- `municipalityFiles == 7891` e tutti i conteggi pubblicati;
-- esclusione esplicita dei cinque codici autorizzati;
+- `municipalityFiles == 7896` e tutti i conteggi pubblicati;
+- riparazione dichiarata dei soli cinque codici autorizzati;
 - riepilogo dimensioni, durata e file più grandi;
 - verifica attuale delle condizioni ISTAT e delle license;
 - verifica attuale dei limiti/termini GitHub Pages;

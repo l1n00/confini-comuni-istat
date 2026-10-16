@@ -16,29 +16,39 @@ EXPECTED_COUNTS = {
     "rings": 8872, "positions": 6968899, "shapePartsOverOneRecords": 490,
     "multipartRecords": 438, "holeRecords": 71, "interiorRings": 121,
 }
-EXCLUDED_MUNICIPALITIES = {
+# Source geometries with self-intersecting rings: the only ones repaired (never any other code).
+REPAIRED_MUNICIPALITIES = {
     "072001": "Acquaviva delle Fonti",
     "072037": "Rutigliano",
     "072040": "Sannicandro di Bari",
     "081019": "Santa Ninfa",
     "087009": "Bronte",
 }
-EXCLUSION_REASON = "Invalid source geometry: ring self-intersection; omitted without repair."
+REPAIR_REASON = "Invalid source geometry: ring self-intersection."
+REPAIR_METHOD = ("Repaired with Shapely make_valid in EPSG:32632, keeping every polygonal part; "
+                 "area change at most 0.1%.")
+REPAIR_MODIFICATION = ("Self-intersecting source rings repaired with Shapely make_valid in EPSG:32632 "
+                       "before conversion; only polygonal parts kept.")
 # Measured from the exact source, including all rings (not only invalid rings).
-EXCLUDED_GEOMETRY_COUNTS = {
+SOURCE_REPAIRED_GEOMETRY_COUNTS = {
     "rings": 14, "positions": 11714, "shapePartsOverOneRecords": 3,
     "multipartRecords": 2, "holeRecords": 2, "interiorRings": 2,
 }
-PUBLISHED_COUNTS = {
+# Baseline of the published records that are not repaired (byte-for-byte source vertices).
+UNREPAIRED_COUNTS = {
     key: value - (5 if key in ("municipalities", "indexEntries", "municipalityFiles")
-                  else EXCLUDED_GEOMETRY_COUNTS[key])
+                  else SOURCE_REPAIRED_GEOMETRY_COUNTS[key])
     for key, value in EXPECTED_COUNTS.items()
 }
 
 
-def exclusion_metadata(municipalities):
-    return [{"code": m.code, "name": m.name, "reason": EXCLUSION_REASON}
-            for m in municipalities if m.code in EXCLUDED_MUNICIPALITIES]
+def repair_metadata(municipalities):
+    return [{"code": m.code, "name": m.name, "reason": REPAIR_REASON, "method": REPAIR_METHOD}
+            for m in municipalities if m.code in REPAIRED_MUNICIPALITIES]
+
+
+def modifications_for(code):
+    return MODIFICATIONS + [REPAIR_MODIFICATION] if code in REPAIRED_MUNICIPALITIES else MODIFICATIONS
 
 
 def layer_path(root, layer, extension):

@@ -11,17 +11,19 @@ rigenerato durante il deploy.
 
 ## Dati prodotti
 
-- `dist/2026/index.json`: 7.891 comuni disponibili, ordinati per codice.
-- `dist/2026/comuni/{codice}.geojson`: 7.891 confini dettagliati.
+- `dist/2026/index.json`: 7.896 comuni disponibili, ordinati per codice.
+- `dist/2026/comuni/{codice}.geojson`: 7.896 confini dettagliati.
 - `dist/source-manifest.json`: hash SHA-256 dei 12 file sorgente consumati.
 - `reports/validation.json`: esito della validazione completa e dimensioni reali.
 - `reports/feasibility.md`: riepilogo leggibile di byte, tempi e hosting.
 
-Cinque sorgenti con anelli auto-intersecanti sono omessi senza riparazione:
-`072001`, `072037`, `072040`, `081019`, `087009`. I loro nomi, motivi e codici
-sono dichiarati in `dataset.excludedMunicipalities`; non compaiono tra i comuni
-cercabili e non hanno endpoint. Questa scelta è esplicita e non nasconde altri
-errori: qualsiasi nuova geometria non valida blocca l'intera build.
+Cinque sorgenti con anelli auto-intersecanti vengono riparate con Shapely
+`make_valid` nella proiezione sorgente (EPSG:32632), mantenendo solo le parti
+poligonali e con una variazione d'area massima dello 0,1%:
+`072001`, `072037`, `072040`, `081019`, `087009`. Sono dichiarate in
+`dataset.repairedMunicipalities` e nelle `modifications` del loro GeoJSON;
+`dataset.excludedMunicipalities` resta vuoto. La riparazione vale solo per
+questi codici: qualsiasi altra geometria non valida blocca l'intera build.
 
 ## Uso da parte dell'app
 
@@ -50,8 +52,7 @@ Per cercare i comuni che contengono i punti del progetto, usa il bbox come
 filtro rapido, scarica i soli GeoJSON candidati e applica il controllo preciso
 punto-in-poligono. Il bbox da solo può produrre falsi positivi.
 
-I codici sono stringhe: `001235` non deve diventare `1235`. I cinque comuni
-esclusi non hanno file. I percorsi `/2026` possono essere corretti dopo una
+I codici sono stringhe: `001235` non deve diventare `1235`. I percorsi `/2026` possono essere corretti dopo una
 revisione ISTAT: usa `ETag`/`Last-Modified`, non una cache permanente basata
 solo sull'URL. Vedi `docs/CLIENT_GUIDE.md`.
 
@@ -61,7 +62,8 @@ solo sull'URL. Vedi `docs/CLIENT_GUIDE.md`.
 - CRS verificato dai `.prj`: WGS 84 / UTM zone 32N (`EPSG:32632`).
 - Output: WGS 84 longitudine/latitudine secondo RFC 7946.
 - Nessuna semplificazione (nessuna decimazione dei vertici), quantizzazione
-  deliberata, riparazione o rimozione per i comuni pubblicati.
+  deliberata o rimozione per i comuni pubblicati; nessuna riparazione, salvo i
+  cinque comuni dichiarati in `dataset.repairedMunicipalities`.
 - Poligoni con isole e buchi interni mantenuti come `MultiPolygon`/`Polygon`.
 - Nomi e accenti UTF-8 senza BOM.
 - Ogni file contiene una sola `Feature`; il nome del file, `id`,

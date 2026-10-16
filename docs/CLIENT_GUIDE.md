@@ -27,7 +27,7 @@ consente inoltre il flusso spaziale descritto sotto.
    quel contesto; altrimenti mostra tutti i candidati e attendi la scelta.
 7. Se nessun risultato, informa che il nome non è disponibile.
 8. Prima di richiedere il GeoJSON, controlla che il codice sia una stringa di
-   sei cifre e non uno dei codici in dataset.excludedMunicipalities.
+   sei cifre.
 
 Flusso alternativo per punti del progetto [longitudine, latitudine]:
 
@@ -65,5 +65,6 @@ Il file contiene una sola feature. La geometria può essere `Polygon` o
 geometrie elementari. Non trattare le parti come identità comunali separate:
 l'identità è `feature.id`.
 
-I cinque codici esclusi sono dichiarati in `dataset.excludedMunicipalities` e
-non producono file: `072001`, `072037`, `072040`, `081019`, `087009`.
+I cinque codici con geometria sorgente riparata sono dichiarati in
+`dataset.repairedMunicipalities` e hanno un file come gli altri:
+`072001`, `072037`, `072040`, `081019`, `087009`.

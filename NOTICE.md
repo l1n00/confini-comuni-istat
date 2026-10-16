@@ -25,8 +25,9 @@ ricontrollato il download e le sue eventuali condizioni particolari.
   WGS 84 secondo RFC 7946.
 - Ogni record comunale valido è stato diviso in un GeoJSON indipendente.
 - I cinque record non validi `072001`, `072037`, `072040`, `081019`, `087009`
-  sono stati omessi senza riparazione, come richiesto esplicitamente dal
-  proprietario del progetto. Sono elencati nei metadati dell'indice.
+  (anelli auto-intersecanti) sono stati riparati con Shapely `make_valid` in
+  EPSG:32632, mantenendo solo le parti poligonali. Sono elencati in
+  `dataset.repairedMunicipalities` e nelle `modifications` del loro GeoJSON.
 - Gli altri confini non sono stati semplificati, quantizzati deliberatamente o
   riparati.
 
